@@ -1,0 +1,258 @@
+---
+layout: post
+title: "postgresql_to_syslog"
+date: 2025-08-10
+---
+
+# postgresql→syslog
+
+# ✅ 최종 목표
+
+**Cisco 장비에서 발생하는 Syslog 로그를 PostgreSQL 데이터베이스에 자동 저장**
+
+---
+
+# 🧭 1. 전체 흐름 요약
+
+```
+swift
+복사편집
+Cisco 장비 ──(Syslog UDP/TCP)──▶ Linux 서버(RSyslog 수신) ──▶ /var/log/messages
+    │
+    └─[로그 전송 설정 필요]
+
+Linux 서버 ──▶ Python 파서(script) 실행 ──▶ PostgreSQL DB에 INSERT
+
+```
+
+---
+
+# 📦 2. 시스템 구성
+
+| 구성 요소 | 설명 |
+| --- | --- |
+| **Cisco 장비** | syslog를 외부로 전송하도록 설정 |
+| **Linux 서버** | RSyslog 설치 및 수신 설정 (TCP/UDP) |
+| **PostgreSQL** | 로그 저장용 DB (`syslog`), 테이블 (`tacacs_logs`) |
+| **Python 파서** | `/var/log/messages` 읽어 DB에 INSERT |
+
+---
+
+# 🛠️ 3. 구성 단계별 상세 절차
+
+---
+
+## ✅ [1] PostgreSQL 준비
+
+1. PostgreSQL 설치 및 시작
+2. DB 생성:
+
+```bash
+bash
+복사편집
+createdb -U postgres syslog
+
+```
+
+1. 사용자 생성 및 권한 부여:
+
+```sql
+sql
+복사편집
+CREATE USER syslogdb WITH PASSWORD 'password';
+GRANT CONNECT ON DATABASE syslog TO syslogdb;
+
+```
+
+1. 테이블 생성:
+
+```sql
+sql
+복사편집
+CREATE TABLE tacacs_logs (
+    id SERIAL PRIMARY KEY,
+    log_time TIMESTAMP,
+    hostname TEXT,
+    service TEXT,
+    message TEXT
+);
+
+```
+
+1. `pg_hba.conf` 수정 (예: `/var/lib/pgsql/data/pg_hba.conf`):
+
+```
+conf
+복사편집
+host    syslog    syslogdb    127.0.0.1/32    md5
+
+```
+
+1. PostgreSQL 재시작:
+
+```bash
+bash
+복사편집
+sudo systemctl restart postgresql
+
+```
+
+---
+
+## ✅ [2] RSyslog 설정
+
+1. `rsyslog.conf` 또는 `/etc/rsyslog.d/cisco.conf`에 수신 설정 추가:
+
+```
+conf
+복사편집
+module(load="imudp")
+input(type="imudp" port="514")
+
+module(load="imtcp")
+input(type="imtcp" port="514")
+
+$template SimpleFormat,"%timestamp:::date-rfc3339% %hostname% %syslogtag% %msg%\n"
+if $fromhost-ip == '192.168.40.2' then /var/log/messages
+& stop
+
+```
+
+1. 방화벽 확인 (UDP, TCP 514 허용)
+
+```bash
+bash
+복사편집
+sudo firewall-cmd --add-port=514/udp --permanent
+sudo firewall-cmd --add-port=514/tcp --permanent
+sudo firewall-cmd --reload
+
+```
+
+1. RSyslog 재시작:
+
+```bash
+bash
+복사편집
+sudo systemctl restart rsyslog
+
+```
+
+---
+
+## ✅ [3] Cisco 장비에서 로그 전송 설정
+
+Cisco IOS에서 아래 명령 실행:
+
+```
+c
+복사편집
+conf t
+logging host 192.168.50.10  ← (리눅스 서버 IP)
+logging trap informational
+exit
+
+```
+
+확인용 테스트 명령어:
+
+```
+cisco
+복사편집
+send log msg "Test log message from CLI"
+
+```
+
+---
+
+## ✅ [4] 로그 수신 확인
+
+```bash
+bash
+복사편집
+tail -f /var/log/messages
+
+```
+
+예시 출력:
+
+```
+nginx
+복사편집
+Aug  1 00:57:03 192.168.40.2 406: *Mar  2 01:53:10.410: %SYS-2-LOGMSG: Message from 0(): msg "Test log message from CLI"
+
+```
+
+---
+
+## ✅ [5] Python 스크립트 작성 (`/var/lib/pgsql/syslogp.py`)
+
+```python
+python
+복사편집
+import psycopg2
+import re
+from datetime import datetime
+
+conn = psycopg2.connect(
+    dbname="syslog",
+    user="syslogdb",
+    password="password",
+    host="127.0.0.1",
+    port="5432"
+)
+cur = conn.cursor()
+
+logfile = '/var/log/messages'
+
+with open(logfile, 'r') as f:
+    for line in f:
+        m = re.match(r'^(\w{3}\s+\d+\s+\d{2}:\d{2}:\d{2})\s+(\S+)\s+\d+: \*(.*)', line)
+        if m:
+            log_time_str, hostname, message = m.groups()
+            try:
+                log_time = datetime.strptime(log_time_str, '%b %d %H:%M:%S')
+                log_time = log_time.replace(year=datetime.now().year)
+            except ValueError:
+                continue
+            cur.execute("""
+                INSERT INTO tacacs_logs (log_time, hostname, service, message)
+                VALUES (%s, %s, %s, %s)
+            """, (log_time, hostname, 'SYSLOG', message))
+
+conn.commit()
+cur.close()
+conn.close()
+
+```
+
+---
+
+## ✅ [6] 실행 및 확인
+
+1. 파서 실행:
+
+```bash
+bash
+복사편집
+python3 /var/lib/pgsql/syslogp.py
+
+```
+
+1. DB에서 결과 확인:
+
+```bash
+bash
+복사편집
+psql -U syslogdb -d syslog
+SELECT * FROM tacacs_logs ORDER BY id DESC LIMIT 10;
+
+```
+
+---
+
+# 🔚 마무리 및 다음 단계
+
+- [ ]  `cron`으로 자동화하거나
+- [ ]  `tail -F` 방식으로 신규 로그만 파싱하게 만들 수도 있음
+- [ ]  다양한 장비 지원하려면 정규표현식 개선 필요
