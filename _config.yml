@@ -3,7 +3,6 @@ description: 기술 학습 및 경험 공유 블로그
 baseurl: ""
 url: "https://onestillforever.github.io"
 
-# Jekyll 테마
 theme: minima
 
 # 플러그인
@@ -12,52 +11,36 @@ plugins:
   - jekyll-sitemap
   - jekyll-archives
 
-# 카테고리별 아카이브 페이지 생성
+# Jekyll Archives 설정
 jekyll-archives:
   enabled:
     - categories
     - tags
   layout: archive
   permalinks:
-    category: '/category/:name/'
-    tag: '/tag/:name/'
+    category: /category/:name/
+    tag: /tag/:name/
 
 # 저자 정보
 author:
   name: OneStillForever
   email: your-email@example.com
 
-# 페이지네이션 (선택사항)
+# 페이지네이션
 paginate: 10
 paginate_path: "/page:num/"
 
-# 마크다운 설정
+# 마크다운 및 코드 하이라이트
 markdown: kramdown
 highlighter: rouge
 
-# 카테고리별 설정
+# 포스트 URL 구조 (카테고리 → 제목)
 collections:
   posts:
     output: true
-    permalink: /:categories/:year/:month/:day/:title/
+
+permalink: /:categories/:title/
 
 # 기본 설정
 timezone: Asia/Seoul
 encoding: utf-8
-
-# 카테고리별 퍼머링크 설정
-permalink: /:categories/:year/:month/:day/:title/
-
-# 카테고리 페이지 자동 생성
-plugins:
-  - jekyll-feed
-  - jekyll-sitemap
-  - jekyll-archives
-
-# Jekyll Archives 설정 (카테고리별 페이지)
-jekyll-archives:
-  enabled:
-    - categories
-  layout: archive
-  permalinks:
-    category: /category/:name/
