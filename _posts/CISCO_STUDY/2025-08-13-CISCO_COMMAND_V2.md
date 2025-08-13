@@ -5,9 +5,6 @@ categories: [CISCO_STUDY]
 date: 2025-08-13
 ---
 
----
-
-````markdown
 # ✅ Cisco IOS CLI 명령어 통합 정리 (풀버전)
 
 > 장비/IOS에 따라 일부 명령어가 다를 수 있습니다. (Catalyst/ISR/ASR 등)
