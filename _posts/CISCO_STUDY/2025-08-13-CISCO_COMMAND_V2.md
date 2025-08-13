@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "CISCO_COMMAND_V2"
-category:[CISCO_STUDY]
+categories: [CISCO_STUDY]
 date: 2025-08-13
 ---
 
