@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "CISCO_COMMAND"
+categories: [CISCO_STUDY]
 date: 2025-08-10
 ---
 
