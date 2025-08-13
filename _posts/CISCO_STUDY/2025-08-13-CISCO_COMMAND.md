@@ -1,8 +1,8 @@
 ---
 layout: post
 title: "CISCO_COMMAND"
+date: 2025-08-13
 categories: [CISCO_STUDY]
-date: 2025-08-10
 ---
 
 # ✅ Cisco IOS CLI 명령어 통합 정리 (풀버전)
